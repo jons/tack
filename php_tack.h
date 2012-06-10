@@ -1,7 +1,7 @@
 /**tack main header file
  *
  * @author jon <jon@wroth.org>
- * @version 1.0
+ * @version 1.1
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -27,12 +27,10 @@
 
 // module info
 //
-#define PHP_TACK_VERSION "1.0"
+#define PHP_TACK_VERSION "1.1"
 #define PHP_TACK_EXTNAME "tack"
 
 
-/* globals BAD
- *
 ZEND_BEGIN_MODULE_GLOBALS(tack)
   regex_t reg_state;
 ZEND_END_MODULE_GLOBALS(tack)
@@ -43,8 +41,6 @@ ZEND_END_MODULE_GLOBALS(tack)
 #else
 #define TACK_G(v) (tack_globals.v)
 #endif
- *
- */
 
 
 // function declarations
@@ -53,7 +49,7 @@ PHP_MINIT_FUNCTION(tack);
 PHP_MSHUTDOWN_FUNCTION(tack);
 PHP_RINIT_FUNCTION(tack);
 PHP_FUNCTION(tk_parse);
-
+static void php_tack_init_globals(zend_tack_globals *tack_globals);
 
 // entry point
 //

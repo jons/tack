@@ -1,7 +1,7 @@
 /**Tack PHP extension: fast, flawless templating
  *
  * @author jon <jon@wroth.org>
- * @version 1.0
+ * @version 1.1
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -54,7 +54,7 @@
 #include "php_tack.h"
 
 
-//ZEND_DECLARE_MODULE_GLOBALS(tack)
+ZEND_DECLARE_MODULE_GLOBALS(tack)
 
 
 static function_entry tack_functions[] = {
@@ -89,6 +89,7 @@ ZEND_GET_MODULE(tack)
 
 PHP_MINIT_FUNCTION(tack)
 {
+  ZEND_INIT_MODULE_GLOBALS(tack, php_tack_init_globals, NULL);
   return SUCCESS;
 }
 
@@ -104,6 +105,17 @@ PHP_MSHUTDOWN_FUNCTION(tack)
 PHP_RINIT_FUNCTION(tack)
 {
   return SUCCESS;
+}
+
+
+
+static void php_tack_init_globals(zend_tack_globals *tack_globals)
+{
+  static char pattern[] = {"\\{\\$[A-Z_0-9]+\\}"};
+
+  if (0 != regcomp(&(tack_globals->reg_state), pattern, REG_EXTENDED))
+    php_printf("OH SHIT\n");
+
 }
 
 
@@ -177,13 +189,13 @@ PHP_FUNCTION(tk_parse)
 
   // compile regex. boohoo
   //
-  if (0 != regcomp(&state, pattern, REG_EXTENDED))
-    RETURN_FALSE;
+  //if (0 != regcomp(&state, pattern, REG_EXTENDED))
+  //  RETURN_FALSE;
 
 
   while(1)
   {
-    regexec_ret = regexec(&state, input_buf + input_offset, 1, &match, 0);
+    regexec_ret = regexec(&TACK_G(reg_state), input_buf + input_offset, 1, &match, 0);
 
 
     if ((regexec_ret == REG_NOMATCH) || (match.rm_so == -1))
@@ -307,7 +319,12 @@ PHP_FUNCTION(tk_parse)
     i++;
   }
 
+  // cleanup
+  //
   regfree(&state);
+  zval_dtor(arr_parsed);
+  zval_dtor(arr_parsed_len);
+  zval_dtor(arr_key_pair_len);
 
 
   // all set.
