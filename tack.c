@@ -1,7 +1,7 @@
 /**Tack PHP extension: fast, flawless templating
  *
  * @author jon <jon@wroth.org>
- * @version 0.2
+ * @version 0.2.1
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -130,7 +130,6 @@ PHP_RINIT_FUNCTION(tack)
 char *output_realloc(char **retval,
                      int *retval_len_total,
                      int retval_len_used,
-                     float mult_alloc_space,
                      const int source_len)
 {
   char *retval_buf_new;
@@ -142,7 +141,7 @@ char *output_realloc(char **retval,
 
   // calc new maximum length
   //
-  *retval_len_total = floor(retval_len_used * mult_alloc_space) + source_len + 1;
+  *retval_len_total = floor(retval_len_used * REALLOC_MULT_USED) + source_len + 1;
 
 #ifdef DEBUG
   php_printf("new=%d\n", *retval_len_total);
@@ -287,7 +286,6 @@ PHP_FUNCTION(tk_parse)
         retval_buf_ptr = output_realloc(&retval_buf,
                                         &retval_buf_len_total,
                                         retval_buf_len_used,
-                                        1.5,
                                         reg_match.rm_so);
       }
 
@@ -366,7 +364,6 @@ PHP_FUNCTION(tk_parse)
             retval_buf_ptr = output_realloc(&retval_buf,
                                             &retval_buf_len_total,
                                             retval_buf_len_used,
-                                            1.5,
                                             repl_buf_len);
           }
 
@@ -416,7 +413,6 @@ PHP_FUNCTION(tk_parse)
           retval_buf_ptr = output_realloc(&retval_buf,
                                           &retval_buf_len_total,
                                           retval_buf_len_used,
-                                          1.0,
                                           key_len);
         }
 
@@ -460,7 +456,6 @@ PHP_FUNCTION(tk_parse)
       retval_buf_ptr = output_realloc(&retval_buf,
                                       &retval_buf_len_total,
                                       retval_buf_len_used,
-                                      1.0,
                                       buffer_len);
     }
 

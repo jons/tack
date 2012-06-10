@@ -1,7 +1,7 @@
 /**tack main header file
  *
  * @author jon <jon@wroth.org>
- * @version 0.2
+ * @version 0.2.1
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -27,8 +27,21 @@
 
 // module info
 //
-#define PHP_TACK_VERSION "0.2"
+#define PHP_TACK_VERSION "0.2.1"
 #define PHP_TACK_EXTNAME "tack"
+
+
+// multiply currently allocated output buffer by this size
+// when reallocating. a higher value ensures that the parse
+// function calls output_realloc() less often, but uses more
+// memory and takes more time to perform a realloc.
+//
+// TODO: deprecate this and replace with an algorithm, no
+// slower than O(n), which allocates the output buffer
+// exactly once.
+//
+#define REALLOC_MULT_USED 1.8
+
 
 
 // function declarations
@@ -41,7 +54,6 @@ PHP_FUNCTION(tk_parse);
 char *output_realloc(char **retval,
                      int *retval_len_total,
                      int retval_len_used,
-                     float mult_alloc_space,
                      const int source_len);
 
 
