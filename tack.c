@@ -1,7 +1,7 @@
 /**Tack PHP extension: fast, flawless templating
  *
  * @author jon <jon@wroth.org>
- * @version 0.2
+ * @version 1.0
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -9,7 +9,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
  * SYNOPSIS.
  *
- * string tk_parse(string in_template, array key_pairs[, boolean keep_unparsed_vars])
+ * string tk_parse(string in_template, array key_pairs)
  *
  * PARAMETERS.
  *
@@ -20,24 +20,17 @@
  * eliminated from the output string, unless keep_unparsed_vars
  * is true.
  *
- *   pattern ::= /\{\$[A-Z_]{1}[A-Z_0-9]*\}/
+ *   pattern ::= /\{\$[A-Z_0-9]+\}/
  *
  * 1. variables are encapsulated with brackets. { }
  * 2. variables begin with $.
  * 3. variables are entirely upper-case.
- * 4. the first letter of a variable is alphabetic only,
- * 5. following characters may be alphanumeric or an underscore.
+ * 3. variables are at least one alphanumeric or underscore.
  *
  *
  * key_pairs: an array of KEY => VALUE pairs where each KEY is
  * the name of a target template variable to be discovered in
  * the string in_template. unmatched targets are ignored.
- *
- *
- * keep_unparsed_vars: if set to true, tack will not ignore
- * template variables found in in_template which are not present
- * in key_pairs. instead, it will leave them in the output.
- * the default behavior (false) is to ignore these variables.
  *
  *
  * RETURN VALUES.
@@ -47,20 +40,10 @@
  * key_pairs, or NULL if left unspecified.
  *
  * returns FALSE if input parameters are of the wrong type.
+ * returns NULL if in_template is zero-length.
+ * returns in_template if key_pairs is zero-length.
  *
- *
- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
- * TODO:
- *
- *  - as a key is substituted, cache its value locally for
- *    the duration of the function (worthwhile? overrides next
- *    item on list: cache of "KEY" is either "{$KEY}", NULL,
- *    or string value located in key_pairs[KEY]).
- *
- *  - reorganize code to shift rm_so to rm_eo when an array key
- *    is not found and keep_unparsed_vars is true (this avoids
- *    an extra set of calls to output_realloc and strncpy).
- */
+ * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 
 #ifdef HAVE_CONFIG_H
@@ -69,6 +52,9 @@
 
 #include "php.h"
 #include "php_tack.h"
+
+
+//ZEND_DECLARE_MODULE_GLOBALS(tack)
 
 
 static function_entry tack_functions[] = {
@@ -107,10 +93,12 @@ PHP_MINIT_FUNCTION(tack)
 }
 
 
+
 PHP_MSHUTDOWN_FUNCTION(tack)
 {
   return SUCCESS;
 }
+
 
 
 PHP_RINIT_FUNCTION(tack)
@@ -120,363 +108,209 @@ PHP_RINIT_FUNCTION(tack)
 
 
 
-/**reallocate the output buffer. use provided multiplier
- * to "guess" at how much more space we might need.
- *
- * return a pointer into the new output buffer at the last
- * position where we can continue copying more values in.
- *
- */
-char *output_realloc(char **retval,
-                     int *retval_len_total,
-                     int retval_len_used,
-                     float mult_alloc_space,
-                     const int source_len)
-{
-  char *retval_buf_new;
-
-
-#ifdef DEBUG
-  php_printf("output_realloc(): used=%d old=%d ", retval_len_used, *retval_len_total);
-#endif
-
-  // calc new maximum length
-  //
-  *retval_len_total = floor(retval_len_used * mult_alloc_space) + source_len + 1;
-
-#ifdef DEBUG
-  php_printf("new=%d\n", *retval_len_total);
-#endif
-
-  // allocate new buffer and clear
-  //
-  retval_buf_new = (char *)emalloc(*retval_len_total);
-  memset((void *)retval_buf_new, 0, *retval_len_total);
-
-
-  // copy old buffer to new one
-  //
-  strncpy(retval_buf_new, *retval, retval_len_used);
-
-
-  // free old buffer
-  //
-  efree(*retval);
-
-
-  // update pointer
-  //
-  *retval = retval_buf_new;
-
-
-  // return pointer into output buffer where we are now.
-  //
-  return *retval + retval_len_used;
-}
-
-
-
-/** parse input template.
- *  param1 string:  template string
- *  param2 array:   template vars=>values
- *  param3 boolean: 
- *  return parsed string (i like string)
- */
 PHP_FUNCTION(tk_parse)
 {
-  static char regex_pattern[] = {"\\{\\$[A-Z_]{1}[A-Z_0-9]*\\}"};
+  static char pattern[] = {"\\{\\$[A-Z_0-9]+\\}"};
 
-  regex_t reg_state;
+  regex_t state;
 
-  regmatch_t reg_match;
+  regmatch_t match;
 
   HashTable *arr_hash;
 
-  HashPosition pointer;
+  HashPosition arr_ptr;
 
-  zend_bool keep_unparsed_vars = 0;
-
-  zval **data,
-       *arr_keypairs,
-       arr_zvalue;
+  zval arr_string,
+       *arr_key_pairs,        // this[key] = value
+       *arr_key_pair_len,     // this[key] = strlen(value)
+       *arr_parsed,           // this[] = output fragment
+       *arr_parsed_len,       // this[] = strlen(fragment of same index)
+       **arr_zvalue,          // value
+       **arr_parsed_data_len;
 
   char *arr_key,
-       *buffer,
-       *buf_ptr,
-       *repl_buf_ptr,
-       *retval_buf,
-       *retval_buf_ptr;
+       *input_buf,            // template
+       *output_buf;           // parsed data
 
-  long longest_value_len;
-
-  int i,
-      reg_compile_retval,
-      reg_execute_retval,
-      retval_buf_len_used,
-      retval_buf_len_total,
-      arr_len,
-      key_len,
-      buffer_len,
-      repl_buf_len,
-      keypairs_len;
+  long i,
+       arr_key_len,
+       copy_dist,
+       zval_type,
+       regexec_ret,
+       arr_string_len,
+       arr_len,
+       key_len,
+       input_offset,
+       input_buf_len,
+       output_offset,
+       output_buf_len;
 
 
-  // parse params
+
+  // check up on input data.
   //
-  if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sa|b", &buffer, &buffer_len, &arr_keypairs, &keep_unparsed_vars) == FAILURE)
+  if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sa", &input_buf, &input_buf_len, &arr_key_pairs) == FAILURE)
+    RETURN_FALSE;
+
+  if (input_buf_len == 0)
+    RETURN_NULL();
+
+  arr_hash = Z_ARRVAL_P(arr_key_pairs);
+  arr_len = zend_hash_num_elements(arr_hash);
+
+  if (arr_len == 0)
+    RETURN_STRING(input_buf, 1);
+
+
+
+  // init local stuff.
+  //
+  ALLOC_INIT_ZVAL(arr_key_pair_len);
+  array_init(arr_key_pair_len);
+  ALLOC_INIT_ZVAL(arr_parsed);
+  array_init(arr_parsed);
+  ALLOC_INIT_ZVAL(arr_parsed_len);
+  array_init(arr_parsed_len);
+  output_buf_len = input_buf_len;
+  input_offset = 0;
+
+
+  // compile regex. boohoo
+  //
+  if (0 != regcomp(&state, pattern, REG_EXTENDED))
     RETURN_FALSE;
 
 
-  // setup:
-  //  get hash ref to arr_keypairs
-  //  get length of arr_keypairs
-  //  compile regex state
-  //  init buffer pointer
-  //  zero length counters
-  //
-  arr_hash = Z_ARRVAL_P(arr_keypairs);
-  arr_len = zend_hash_num_elements(arr_hash);
-  reg_compile_retval = regcomp(&reg_state, regex_pattern, REG_EXTENDED);
-  buf_ptr = buffer;
-  longest_value_len = 0;
-  retval_buf_len_used = 0;
-
-
-  // guess at the size of the output buffer
-  //
-  for(zend_hash_internal_pointer_reset_ex(arr_hash, &pointer);
-      zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS;
-      zend_hash_move_forward_ex(arr_hash, &pointer))
-    if (Z_TYPE_PP(data) == IS_STRING)
-      if (Z_STRLEN_PP(data) > longest_value_len)
-        longest_value_len = Z_STRLEN_PP(data);
-
-
-  // allocate the output buffer
-  //
-  retval_buf_len_total = buffer_len + (longest_value_len * arr_len);
-  retval_buf = (char *)emalloc(retval_buf_len_total);
-  memset((void *)retval_buf, 0, retval_buf_len_total);
-  retval_buf_ptr = retval_buf;
-
-
-  // start parsing the input string for template variables.
-  //
   while(1)
   {
-    reg_execute_retval = regexec(&reg_state, buf_ptr, 1, &reg_match, 0);
-
-    if (reg_execute_retval == REG_NOMATCH)
-      break;
-
-    if (reg_match.rm_so == -1)
-      break;
+    regexec_ret = regexec(&state, input_buf + input_offset, 1, &match, 0);
 
 
-    // is there anything to add to the output buffer that comes before
-    // the template variable?
-    //
-    if (reg_match.rm_so > 0)
+    if ((regexec_ret == REG_NOMATCH) || (match.rm_so == -1))
     {
-      // and can we fit these chars in the output buffer?
+      // add what's left of the input string into the parsed array.
       //
-      if ((retval_buf_len_used + reg_match.rm_so) >= retval_buf_len_total)
-      {
-        // no, out of output buffer space, reallocate.
-        //
-        retval_buf_ptr = output_realloc(&retval_buf,
-                                        &retval_buf_len_total,
-                                        retval_buf_len_used,
-                                        1.5,
-                                        reg_match.rm_so);
-      }
+      copy_dist = input_buf_len - input_offset;
 
-      // copy data into output buffer
-      //
-      strncpy(retval_buf_ptr, buf_ptr, reg_match.rm_so);
-      retval_buf_len_used += reg_match.rm_so;
-      retval_buf_ptr += reg_match.rm_so;
+#if 0
+      fprintf(stderr, "finishing with %d chars\n", copy_dist);
+#endif
+
+      add_next_index_stringl(arr_parsed, (input_buf + input_offset), copy_dist, 1);
+      add_next_index_long(arr_parsed_len, copy_dist);
+      break;
     }
 
-
-    // now get the matched key out of the input buffer
+    // check if key is ok. get end_offset of input string to copy to.
+    //   must exist in hash.
+    //   must have string-convertible type.
     //
-    // extract key from position (buf_ptr+rm_so+2) with
-    // length (rm_so - rm_eo):
-    // {$ABCDEFG}0, add 1 to make space for trailing char
-    // {$ABCDEFG}0, allocate len(this) chars, init to zero
-    // 0000000000, copy len-5 chars to key
-    // ABCDEFG000
-    //
-    key_len = (reg_match.rm_eo - reg_match.rm_so) + 1;
-    arr_key = (char *)emalloc(key_len);
-    memset((void *)arr_key, 0, key_len);
-    strncpy(arr_key, (buf_ptr+reg_match.rm_so+2), key_len - 4);
-
-#ifdef DEBUG
-    php_printf("\nkey:^%s^%d^\n", arr_key, key_len);
+    copy_dist = match.rm_eo;
+    arr_key_len = (match.rm_eo - match.rm_so) - 3;
+    arr_key = (char *)emalloc(arr_key_len+1);
+    memset((void *)arr_key, 0, arr_key_len+1);
+    strncpy(arr_key, (input_buf + input_offset + match.rm_so + 2), arr_key_len);
+#if 0
+    fprintf(stderr,"match(%d):%s\n", arr_key_len, arr_key);
 #endif
-
-    // look key up in arr_hash
-    //
     if (zend_hash_find(arr_hash,
-                       arr_key,
-                       key_len - 3,
-                       (void **)&data) == SUCCESS)
+                        arr_key,
+                        arr_key_len + 1,
+                        (void **)&arr_zvalue) == SUCCESS)
     {
-#ifdef DEBUG
-      php_printf("found key in array!\n");
-#endif
+      zval_type = Z_TYPE_PP(arr_zvalue);
 
-      // if we found a value we can easily convert
-      // to a string, do so, and add it to the
-      // output buffer. otherwise silently ignore it.
-      //
-      switch (Z_TYPE_PP(data))
+      switch(zval_type)
       {
         case IS_ARRAY:
-        case IS_RESOURCE:
         case IS_OBJECT:
+        case IS_RESOURCE:
           break;
 
         default:
-#ifdef DEBUG
-          php_printf("i can work with this type.\n");
-#endif
-
-          arr_zvalue = **data;
-          zval_copy_ctor(&arr_zvalue);
-          convert_to_string(&arr_zvalue);
-
-          // add to output buffer here.
-          //
-          repl_buf_ptr = Z_STRVAL(arr_zvalue);
-          repl_buf_len = Z_STRLEN(arr_zvalue);
-
-#ifdef DEBUG
-          php_printf("my string: ^");
-          PHPWRITE(repl_buf_ptr, repl_buf_len);
-          php_printf("^ len=%d\n", repl_buf_len);
-#endif
-
-          // again, reallocate if too long.
-          //
-          if ((retval_buf_len_used + repl_buf_len) >= retval_buf_len_total)
-          {
-            retval_buf_ptr = output_realloc(&retval_buf,
-                                            &retval_buf_len_total,
-                                            retval_buf_len_used,
-                                            1.5,
-                                            repl_buf_len);
-          }
-
-          // copy template var replacement into output buffer
-          //
-          strncpy(retval_buf_ptr, repl_buf_ptr, repl_buf_len);
-          retval_buf_len_used += repl_buf_len;
-          retval_buf_ptr += repl_buf_len;
-
-          zval_dtor(&arr_zvalue);
+          copy_dist = match.rm_so;
           break;
       }
-    }
-    else
-    {
-      // the key wasn't in the input array. we're going to leave the
-      // template variable hidden unless told otherwise.
-      //
-      // TODO: optimize: we don't ever want to look at that key again,
-      // but we will want to do keep the unparsed var in the output again.
-      //
-      if (keep_unparsed_vars)
-      {
-#ifdef DEBUG
-        php_printf("key not found. using var ");
-#endif
 
-        // ABCDEFG0000, shift key right two chars
-        // ABABCDEFG00, set brackets and $
-        // {$ABCDEFG}0
-        //
-        for(i = key_len-2; i > 1; i--)
-          arr_key[i] = arr_key[i-2];
+    }/*key exists?*/
 
-        arr_key[0] = '{';
-        arr_key[1] = '$';
-        arr_key[key_len-2] = '}';
-
-#ifdef DEBUG
-        php_printf("^%s^ %x\n", arr_key, arr_key[key_len-1]);
-#endif
-
-        // key is ready to be added to output, do we reallocate?
-        //
-        if ((retval_buf_len_used + key_len) >= retval_buf_len_total)
-        {
-          retval_buf_ptr = output_realloc(&retval_buf,
-                                          &retval_buf_len_total,
-                                          retval_buf_len_used,
-                                          1.0,
-                                          key_len);
-        }
-
-        // copy original template var into output buffer
-        //
-        strncpy(retval_buf_ptr, arr_key, key_len-1);
-        retval_buf_len_used += (key_len-1);
-        retval_buf_ptr += (key_len-1);
-      }
-    }
-
-    // done with the key.
-    //
     efree(arr_key);
-
-
-    // move pointers forward in source buffer,
-    // to start right after the template var ends.
-    //
-    buf_ptr += reg_match.rm_eo;
-    buffer_len -= reg_match.rm_eo;
-  }//loop
-
-
-#ifdef DEBUG
-  php_printf("leftover: old=%d new=%d\n", buffer_len, strlen(buf_ptr));
+#if 0
+    fprintf(stderr, "copying %d chars\n", copy_dist);
 #endif
-
-
-  // if there's input string left..
-  //
-  if (buffer_len > 0)
-  {
-    // ..see if we need more space for it..
+    // put input_buf[0 .. end_at] into arr_parsed[].
     //
-    if ((retval_buf_len_used + buffer_len) >= retval_buf_len_total)
+    add_next_index_stringl(arr_parsed, (input_buf + input_offset), copy_dist, 1);
+    add_next_index_long(arr_parsed_len, copy_dist);
+
+
+    // if the key exists,
+    //
+    if (copy_dist == match.rm_so)
     {
-      // reallocate one last time. maybe.
-      // this should really be an inline function.
+      // gotta copy arr_hash[arr_key] to cast it to a string.
+      // add replacement value length to output_buf_len,
+      // subtract the length of the key string.
+      //  (arr_value_len[arr_key] - (rm_eo - rm_so) + 3)
       //
-      retval_buf_ptr = output_realloc(&retval_buf,
-                                      &retval_buf_len_total,
-                                      retval_buf_len_used,
-                                      1.0,
-                                      buffer_len);
-    }
+      //  TODO: cache arr_string_len with arr_key_pair_len<char *, long>
+      //
+      arr_string = **arr_zvalue;
+      zval_copy_ctor(&arr_string);
+      convert_to_string(&arr_string);
+      arr_string_len = Z_STRLEN(arr_string);
+#if 0
+      fprintf(stderr, "old=%d ", output_buf_len);
+#endif
+      output_buf_len += (arr_string_len - (arr_key_len+3));
+#if 0
+      fprintf(stderr, "new=%d\n", output_buf_len);
+#endif
+      add_next_index_stringl(arr_parsed,  Z_STRVAL(arr_string), arr_string_len, 1);
+      add_next_index_long(arr_parsed_len, arr_string_len);
+      zval_dtor(&arr_string);
 
-    // ..then copy the last of it into output buffer.
+    }/*key exists?*/
+
+
+    // jump ahead to get next result.
     //
-    strncpy(retval_buf_ptr, buf_ptr, buffer_len);
-    retval_buf_len_used += buffer_len;
-    retval_buf_ptr += buffer_len;
+    input_offset += match.rm_eo;
+
+  }/*while*/
+
+
+  // allocate output_buf_len chars.
+  // implode arr_parsed[] into output_buf.
+  //
+#if 0
+  fprintf(stderr, "allocating %d chars\n", output_buf_len+1);
+#endif
+  output_buf = (char *)emalloc(output_buf_len+1);
+  memset((void *)output_buf, 0, output_buf_len+1);
+  output_offset = 0;
+  i = 0;
+
+  // copy fragments into output buffer
+  //
+  for(zend_hash_internal_pointer_reset_ex(Z_ARRVAL_P(arr_parsed), &arr_ptr);
+      zend_hash_get_current_data_ex(Z_ARRVAL_P(arr_parsed), (void**)&arr_zvalue, &arr_ptr) == SUCCESS;
+      zend_hash_move_forward_ex(Z_ARRVAL_P(arr_parsed), &arr_ptr))
+  {
+    // both output lists should be same length..
+    //
+    if (zend_hash_index_find(Z_ARRVAL_P(arr_parsed_len), i, (void **)&arr_parsed_data_len) == SUCCESS)
+    {
+      strncpy(output_buf + output_offset, Z_STRVAL_PP(arr_zvalue), Z_LVAL_PP(arr_parsed_data_len));
+      output_offset += Z_LVAL_PP(arr_parsed_data_len);
+    }
+    i++;
   }
 
-  // report memory overhead
-  //
-#ifdef DEBUG
-  php_printf("total buffer: %d\n", retval_buf_len_total);
-  php_printf("used buffer:  %d\n", retval_buf_len_used);
-#endif
+  regfree(&state);
 
-  RETURN_STRING(retval_buf, 0);
+
+  // all set.
+  //
+  RETURN_STRING(output_buf, 0);
 }
