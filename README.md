@@ -5,6 +5,7 @@ tack
 engine or substitution language.</p>
 
 <ul>
+<li>v1.1 - fix leaks, and misc. cleanup</li>
 <li>v1.0 - allocate exact output buffer size in constant time</li>
 <li>v0.2 - improved memory reallocation, option to keep unparsed variables</li>
 <li>v0.1 - proof of concept</li></ul>
