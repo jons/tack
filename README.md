@@ -7,12 +7,12 @@ engine or substitution language.</p>
 the problem
 -----------
 
-<p>since this is a PHP project, the explanation will stick to PHP
+<p>since this is a php project, the explanation will stick to php
 terminology.</p>
 
 <p>in short, repeated calls to <code><b>str_replace</b></code>, or the use of
 arrays for search and replace variables, suffers from what is noted as the
-"replacement order gotcha" in the <a href="http://php.net/str_replace">PHP
+"replacement order gotcha" in the <a href="http://php.net/str_replace">php
 documentation</a>.</p>
 
 <p>suppose you have the text body <code>"cat"</code>, and you are to make two
@@ -42,11 +42,22 @@ changed. the output string in our example should <i>always</i> be
 <code>"bat"</code>, because the usual point of templating involves producing
 markup which may clash with the templating language itself. <i>ordered
 replacement may result in an intermediate state of the output which appears to
-contain instructions to perform a substition which was not called for.</i></p>
+contain instructions to perform a substition which was not called for.</i>
+this is not evident in our simple example, but if you are here trying to find
+a better templating engine, you know exactly what i'm talking about.</p>
 
 <p>to accomplish this in v0.1 i have written the most basic regex replacement
 algorithm which 1) does the work, 2) does it in a fashion adaptable to other
-languages, 3) has no gimmicks; can be easily cache-accelerated. however this
-is relatively old code, and only contains project management files sufficient
-for PHP extensions at the time. good luck using it, i have no idea if it
-can still be compiled as such.</p>
+languages, 3) has no gimmicks; can be easily cache-accelerated.</p>
+
+<p>this is relatively old code, and only contains project management files
+sufficient for php extensions at the time. good luck using it, i have no idea
+if it can still be compiled as such.</p>
+
+
+a modest footnote
+-----------------
+
+<p>this project was conceived and created in january 2006. i am sure the authors
+of other php templating systems have figured out by now that they had this
+problem, and have corrected it, but at the time nobody had yet done so.</p>

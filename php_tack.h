@@ -1,11 +1,10 @@
 /**tack main header file
  *
- * @author jonathan shusta
+ * @author jon <jon@wroth.org>
  * @version 0.1
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
- * contact: <jon|veganmeansnospam.wrothorg>
  *
  */
 
