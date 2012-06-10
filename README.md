@@ -24,15 +24,11 @@ documentation</a>.</p>
 substitutions:</p>
 <blockquote>b =&gt; m<br />c =&gt; b</blockquote>
 
-<p>with <code><b>str_replace<?b></code> your output is subject to implementation
+<p>with <code><b>str_replace</b></code> your output is subject to implementation
 detail because the order in which these substitutions are run on the text body
 will affect the outcome. if the order is known then the algorithm can be taken
 advantage of to do clever things, and all Real Programmers understand that this
-is Good.</p>
-
-<p>however, neither being clever nor being lazy is the correct behavior of a
-templating engine, because is a particular use of general-purpose string
-replacement.</p>
+is Good -- but it is not desired here.</p>
 
 
 the solution
@@ -47,10 +43,6 @@ replacement may result in an intermediate state of the output which appears to
 contain instructions to perform a substition which was not called for.</i>
 this is not evident in our simple example, but if you are here trying to find
 a better templating engine, you know exactly what i'm talking about.</p>
-
-<p>to accomplish this in v0.1 i have written the most basic regex replacement
-algorithm which 1) does the work, 2) does it in a fashion adaptable to other
-languages, 3) has no gimmicks; can be easily cache-accelerated.</p>
 
 <p>this is relatively old code, and only contains project management files
 sufficient for php extensions at the time. good luck using it, i have no idea
