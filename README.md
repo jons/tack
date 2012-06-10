@@ -4,6 +4,10 @@ tack
 <p>tack is the <i>correct</i> engine implementation for <i>any</i> templating
 engine or substitution language.</p>
 
+<ul>
+<li>v0.2 - improved memory reallocation, option to keep unparsed variables</li>
+<li>v0.1 - proof of concept</li></ul>
+
 the problem
 -----------
 
@@ -17,10 +21,7 @@ documentation</a>.</p>
 
 <p>suppose you have the text body <code>"cat"</code>, and you are to make two
 substitutions:</p>
-
-> b =&gt; m
->
-> c =&gt; b
+<blockquote>b =&gt; m<br />c =&gt; b</blockquote>
 
 <p>with <code><b>str_replace<?b></code> your output is subject to implementation
 detail because the order in which these substitutions are run on the text body

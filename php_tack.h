@@ -1,7 +1,7 @@
 /**tack main header file
  *
  * @author jon <jon@wroth.org>
- * @version 0.1
+ * @version 0.2
  *
  * a high-power, high-speed HTML-friendly
  * templating system for PHP.
@@ -27,7 +27,7 @@
 
 // module info
 //
-#define PHP_TACK_VERSION "0.1"
+#define PHP_TACK_VERSION "0.2"
 #define PHP_TACK_EXTNAME "tack"
 
 
@@ -37,6 +37,12 @@ PHP_MINIT_FUNCTION(tack);
 PHP_MSHUTDOWN_FUNCTION(tack);
 PHP_RINIT_FUNCTION(tack);
 PHP_FUNCTION(tk_parse);
+
+char *output_realloc(char **retval,
+                     int *retval_len_total,
+                     int retval_len_used,
+                     float mult_alloc_space,
+                     const int source_len);
 
 
 // entry point
