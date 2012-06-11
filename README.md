@@ -41,9 +41,19 @@ changed. the output string in our example should <i>always</i> be
 <code>"bat"</code>, because the usual point of templating involves producing
 markup which may clash with the templating language itself. <i>ordered
 replacement may result in an intermediate state of the output which appears to
-contain instructions to perform a substition which was not called for.</i>
-this is not evident in our simple example, but if you are here trying to find
-a better templating engine, you know exactly what i'm talking about.</p>
+contain instructions to perform a substition which was not called for.</i></p>
+
+<p>in our simple example, <code>"bat"</code> is actually an intermediate state
+when substitutions are made last-to-first, and when the call returns the output
+is <code>"mat"</code>. in practice, this will never be so benign; murphy's law
+dictates that the output is a damaging code-generated script that erases your
+hard disk, or hideous mangled html that gets you fired from your job as a guy
+that doesn't create mangled html.</p>
+
+<p>if you are here trying to find a better templating engine because templating
+languages are too close to the domain language of the outputs you are dealing
+with, or because you tried to substitute in the contents of a template itself,
+you know exactly what i'm talking about.</p>
 
 <p>this is relatively old code, and only contains project management files
 sufficient for php extensions at the time. good luck using it, i have no idea
