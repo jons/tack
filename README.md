@@ -10,6 +10,12 @@ engine or substitution language.</p>
 <li>v0.2 - improved memory reallocation, option to keep unparsed variables</li>
 <li>v0.1 - proof of concept</li></ul>
 
+the license
+-----------
+
+CCBYSA 3.0 http://creativecommons.org/licenses/by-sa/3.0/
+
+
 the problem
 -----------
 
